@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor LPR - Parking Compliance</title>
+    <!-- Tailwind CSS para estilos rápidos y modernos -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Cliente de Supabase vía CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans p-6">
+
+    <div class="max-w-6xl mx-auto">
+        <!-- Encabezado -->
+        <header class="flex justify-between items-center mb-8 bg-white p-4 rounded-lg shadow">
+            <div>
+                <h1 class="text-2xl font-bold text-blue-900">Monitor de Precisión LPR</h1>
+                <p class="text-sm text-gray-500">Gestión de tickets y rendimiento de cámaras</p>
+            </div>
+            <button onclick="cargarTickets()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition">
+                Actualizar Datos
+            </button>
+        </header>
+
+        <!-- Tabla de Tickets -->
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <table class="min-w-full text-left border-collapse">
+                <thead class="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                        <th class="py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">Cámara</th>
+                        <th class="py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">Problema Detectado</th>
+                        <th class="py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">Detalles</th>
+                        <th class="py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                        <th class="py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                    </tr>
+                </thead>
+                <tbody id="tabla-tickets" class="divide-y divide-gray-200">
+                    <!-- Los datos se inyectarán aquí con JavaScript -->
+                    <tr>
+                        <td colspan="5" class="py-4 text-center text-gray-500">Cargando tickets...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Lógica de la aplicación -->
+    <script>
+        // 1. Inicializar Supabase
+        const supabaseUrl = 'TU_SUPABASE_URL';
+        const supabaseKey = 'TU_SUPABASE_ANON_KEY';
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        // 2. Función para obtener y mostrar los tickets
+        async function cargarTickets() {
+            const tbody = document.getElementById('tabla-tickets');
+            tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-gray-500">Cargando...</td></tr>';
+
+            try {
+                // Hacemos una consulta haciendo "join" con la tabla cameras para obtener el nombre
+                const { data: tickets, error } = await supabase
+                    .from('maintenance_tickets')
+                    .select(`
+                        id,
+                        issue_category,
+                        description,
+                        status,
+                        created_at,
+                        cameras ( name )
+                    `)
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+
+                // Limpiar tabla
+                tbody.innerHTML = '';
+
+                if (tickets.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-green-600 font-semibold">Todo en orden. No hay tickets abiertos.</td></tr>';
+                    return;
+                }
+
+                // Renderizar cada fila
+                tickets.forEach(ticket => {
+                    // Colores dinámicos para el estado
+                    let statusColor = ticket.status === 'open' ? 'bg-red-100 text-red-800' : 
+                                      ticket.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' : 
+                                      'bg-green-100 text-green-800';
+                    
+                    let statusText = ticket.status === 'open' ? 'Abierto' : 
+                                     ticket.status === 'in_progress' ? 'En Revisión' : 
+                                     'Resuelto';
+
+                    const fila = `
+                        <tr class="hover:bg-gray-50 transition">
+                            <td class="py-4 px-6 font-semibold text-gray-700">${ticket.cameras?.name || 'Desconocida'}</td>
+                            <td class="py-4 px-6">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    ${ticket.issue_category.replace(/_/g, ' ')}
+                                </span>
+                            </td>
+                            <td class="py-4 px-6 text-sm text-gray-600">${ticket.description}</td>
+                            <td class="py-4 px-6">
+                                <span class="px-2 py-1 text-xs font-semibold rounded-full ${statusColor}">
+                                    ${statusText}
+                                </span>
+                            </td>
+                            <td class="py-4 px-6 text-sm text-gray-500">
+                                ${new Date(ticket.created_at).toLocaleDateString('es-ES')}
+                            </td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += fila;
+                });
+
+            } catch (error) {
+                console.error("Error cargando datos: ", error);
+                tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-red-500 font-semibold">Error al conectar con la base de datos.</td></tr>';
+            }
+        }
+
+        // 3. Ejecutar al cargar la página
+        window.addEventListener('DOMContentLoaded', cargarTickets);
+    </script>
+</body>
+</html>
